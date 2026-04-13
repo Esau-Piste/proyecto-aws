@@ -5,8 +5,7 @@ from typing import List
 app = FastAPI(title="API Escuela AWS")
 
 # --- ENTIDADES Y VALIDACIONES ---
-# Pydantic valida automáticamente que los campos no estén vacíos (min_length=1) 
-# y que los tipos de datos (int, str, float) sean correctos.
+
 class Alumno(BaseModel):
     id: int
     nombres: str = Field(..., min_length=1)
@@ -25,9 +24,7 @@ class Profesor(BaseModel):
 alumnos_db = []
 profesores_db = []
 
-# ==========================================
 # ENDPOINTS: ALUMNOS
-# ==========================================
 
 @app.get("/alumnos", response_model=List[Alumno], status_code=status.HTTP_200_OK)
 def get_alumnos():
@@ -64,9 +61,9 @@ def delete_alumno(id: int):
             return {"mensaje": "Alumno eliminado exitosamente"}
     raise HTTPException(status_code=404, detail="Alumno no encontrado")
 
-# ==========================================
+
 # ENDPOINTS: PROFESORES
-# ==========================================
+
 
 @app.get("/profesores", response_model=List[Profesor], status_code=status.HTTP_200_OK)
 def get_profesores():
