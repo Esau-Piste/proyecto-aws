@@ -1,8 +1,17 @@
 from fastapi import FastAPI, HTTPException, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import List
 
 app = FastAPI(title="API Escuela AWS")
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=400,
+        content={"detail": "Error de validacion en los campos"}
+    )
 
 # --- ENTIDADES Y VALIDACIONES ---
 
