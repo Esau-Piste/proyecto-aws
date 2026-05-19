@@ -1,10 +1,12 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, File, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from sqlalchemy import create_engine, Column, Integer, String, Float
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
+import boto3
+import uuid
 
 
 URL_BASE_DATOS = "mysql+pymysql://admin:Admin12345@escueladb.ctwcggwkkjbr.us-east-1.rds.amazonaws.com:3306/escueladb"
@@ -12,7 +14,21 @@ engine = create_engine(URL_BASE_DATOS)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+
+# CONFIGURACIÓN DE AWS S3 
+BUCKET_NAME = "fotos-escuela-proyecto-2026" 
+
+s3_client = boto3.client(
+    's3',
+    aws_access_key_id="ACCESS_KEY_AQUI",
+    aws_secret_access_key="SECRET_KEY_AQUI",
+    aws_session_token="SESSION_TOKEN_AQUI",
+    region_name="us-east-1"
+)
+
 app = FastAPI(title="API Escuela AWS")
+
+
 
 
 @app.exception_handler(RequestValidationError)
@@ -73,6 +89,36 @@ class Profesor(BaseModel):
 
 
 # ENDPOINTS DE ALUMNOS
+
+@app.post("/alumnos/{id}/fotoPerfil", status_code=200)
+def upload_foto_perfil(id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    
+    alumno_db = db.query(AlumnoDB).filter(AlumnoDB.id == id).first()
+    if not alumno_db:
+        raise HTTPException(status_code=404, detail="Alumno no encontrado")
+    
+    extension = file.filename.split(".")[-1]
+    nombre_archivo = f"foto_perfil_{id}_{uuid.uuid4().hex}.{extension}"
+    try:
+        s3_client.upload_fileobj(
+            file.file, 
+            BUCKET_NAME, 
+            nombre_archivo,
+            ExtraArgs={'ACL': 'public-read', 'ContentType': file.content_type}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al subir imagen a S3: {str(e)}")
+    
+   
+    foto_url = f"https://{BUCKET_NAME}.s3.amazonaws.com/{nombre_archivo}"
+    
+    
+    alumno_db.fotoPerfilUrl = foto_url
+    db.commit()
+    db.refresh(alumno_db)
+    
+    # Devolvemos los datos del alumno (que ya incluyen la URL de la foto)
+    return alumno_db
 
 @app.get("/alumnos", response_model=List[Alumno], status_code=200)
 def get_alumnos(db: Session = Depends(get_db)):
