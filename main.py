@@ -15,6 +15,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
+
 # CONFIGURACIÓN DE AWS S3 
 BUCKET_NAME = "fotos-escuela-proyecto-2026" 
 
@@ -26,9 +27,22 @@ s3_client = boto3.client(
     region_name="us-east-1"
 )
 
+
+# --- CONFIGURACIÓN DE AWS SNS ---
+SNS_TOPIC_ARN = "arn:aws:sns:us-east-1:654654456078:alertas-calificaciones"
+
+sns_client = boto3.client(
+    'sns',
+    aws_access_key_id="TU_ACCESS_KEY_AQUI",
+    aws_secret_access_key="TU_SECRET_KEY_AQUI",
+    aws_session_token="TU_SESSION_TOKEN_AQUI",
+    region_name="us-east-1"
+)
+
+
+
+
 app = FastAPI(title="API Escuela AWS")
-
-
 
 
 @app.exception_handler(RequestValidationError)
@@ -117,8 +131,38 @@ def upload_foto_perfil(id: int, file: UploadFile = File(...), db: Session = Depe
     db.commit()
     db.refresh(alumno_db)
     
-    # Devolvemos los datos del alumno (que ya incluyen la URL de la foto)
+    
     return alumno_db
+
+@app.post("/alumnos/{id}/email", status_code=200)
+def enviar_email_alumno(id: int, db: Session = Depends(get_db)):
+   
+    alumno_db = db.query(AlumnoDB).filter(AlumnoDB.id == id).first()
+    if not alumno_db:
+        raise HTTPException(status_code=404, detail="Alumno no encontrado")
+    
+    
+    mensaje = f"""
+    Hola,
+    
+    Te enviamos la informacion del siguiente alumno:
+    Nombre: {alumno_db.nombres} {alumno_db.apellidos}
+    Promedio de Calificaciones: {alumno_db.promedio}
+    
+    Saludos desde el sistema escolar en AWS.
+    """
+    
+   
+    try:
+        sns_client.publish(
+            TopicArn=SNS_TOPIC_ARN,
+            Message=mensaje,
+            Subject=f"Calificaciones del Alumno {alumno_db.nombres}"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error enviando SNS: {str(e)}")
+    
+    return {"mensaje": "Alerta enviada a SNS exitosamente"}
 
 @app.get("/alumnos", response_model=List[Alumno], status_code=200)
 def get_alumnos(db: Session = Depends(get_db)):
